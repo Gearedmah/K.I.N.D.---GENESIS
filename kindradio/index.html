@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>K.I.N.D. Radio — Genesis</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,sans-serif;background:#101923;color:#eaf4f5}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at top,#2a4955,#101923 75%);min-height:100vh}
+main{max-width:560px;margin:auto;padding:22px}header{display:flex;justify-content:space-between;align-items:center}
+h1{letter-spacing:.22em;font-size:1.8rem;margin:0}small,.hint{color:#aac0c9}
+.lcd{background:#b6d4c0;color:#19332f;margin:26px 0 18px;padding:24px;border:7px solid #38505a;border-radius:16px;min-height:155px;box-shadow:0 14px 26px #0005}
+.lcd small{color:#34554f}.lcd strong{display:block;overflow-wrap:anywhere;font:700 clamp(1.5rem,5vw,2.2rem) ui-monospace,monospace;padding:10px 0}
+button,label.pick{background:#284451;color:#eff;cursor:pointer;border:1px solid #53727c;border-radius:12px;padding:13px;font-size:1rem}
+button:disabled{opacity:.4;cursor:default}button:focus-visible,label:focus-within,input:focus-visible{outline:3px solid #b6f0e9}
+.controls{display:flex;justify-content:center;gap:8px;flex-wrap:wrap}.controls button{font-size:1.4rem;min-width:65px}
+.controls #play{background:#b6f0e9;color:#132b2b}section{margin-top:27px}h2{font-size:1rem;color:#b6f0e9;letter-spacing:.14em}
+input[type=file]{position:absolute;opacity:0;width:1px;height:1px}label.pick{display:inline-block}
+.progress{display:flex;align-items:center;gap:10px;margin:22px 0}.progress input{flex:1;min-width:0;accent-color:#b6f0e9}
+.progress span{font-size:.8rem;font-variant-numeric:tabular-nums}ol{padding:0;list-style:none}
+li{margin:7px 0}li button{width:100%;text-align:left;overflow-wrap:anywhere}
+li button[aria-current=true]{border-color:#b6f0e9;background:#365b61}
+.hint{font-size:.88rem}footer{margin-top:35px;border-top:1px solid #47616b;padding-top:17px;font-size:.8rem;color:#aac0c9}
+</style></head><body><main>
+<header><div><h1>K.I.N.D.</h1><small>RADIO · GENESIS</small></div><button id="power" aria-label="Stop playback">⏻</button></header>
+<div class="lcd" role="status" aria-live="polite"><small>HOME / LOCAL PLAYER</small><strong id="name">READY</strong><span id="state">Choose your music to begin.</span></div>
+<div class="controls"><button id="prev" aria-label="Previous" disabled>⏮</button><button id="play" aria-label="Play or pause" disabled>▶</button><button id="next" aria-label="Next" disabled>⏭</button><button id="stop" aria-label="Stop" disabled>⏹</button></div>
+<div class="progress"><span id="elapsed">0:00</span><input id="seek" aria-label="Seek through track" type="range" min="0" max="100" value="0" disabled><span id="duration">0:00</span></div>
+<section><h2>YOUR MUSIC</h2><label class="pick">＋ Add audio files<input id="files" type="file" accept="audio/*,.mp3,.wav,.m4a,.ogg,.flac" multiple></label> <button id="clear">Clear queue</button><p class="hint">Your music stays on this device. No upload required.</p><ol id="queue"></ol></section>
+<section><h2>OUTPUT</h2><p>Playing on: <b>This device</b></p><p class="hint">Casting is not implemented in this first version. Chromecast needs an accessible media stream; browser-only file URLs cannot be cast directly.</p></section>
+<p id="message" role="status" class="hint"></p><footer>Web prototype v0.1 · Raven &amp; Ember</footer><audio id="audio" preload="metadata"></audio>
+</main><script>
+(()=>{'use strict';
+const $=id=>document.getElementById(id),a=$('audio');
+let songs=[],idx=-1,url=null;
+const fmt=n=>Number.isFinite(n)?Math.floor(n/60)+':'+String(Math.floor(n%60)).padStart(2,'0'):'0:00';
+function render(){
+const s=songs[idx];$('name').textContent=s?s.name:'READY';
+$('state').textContent=s?(a.paused?'PAUSED':'PLAYING'):'Choose your music to begin.';
+$('play').textContent=a.paused?'▶':'Ⅱ';
+for(const x of ['prev','next','play','stop'])$(x).disabled=idx<0;
+$('elapsed').textContent=fmt(a.currentTime);$('duration').textContent=fmt(a.duration);
+$('seek').disabled=!Number.isFinite(a.duration)||a.duration<=0;
+$('seek').value=$('seek').disabled?0:100*a.currentTime/a.duration;
+document.querySelectorAll('#queue button').forEach((b,i)=>b.setAttribute('aria-current',String(i===idx)));
+}
+function choose(i,auto=true){
+if(i<0||i>=songs.length)return;
+a.pause();a.removeAttribute('src');a.load();
+if(url)URL.revokeObjectURL(url);
+idx=i;url=URL.createObjectURL(songs[i].file);a.src=url;a.load();render();
+if(auto)a.play().catch(()=>{$('message').textContent='Tap play to start.'});
+}
+function queue(){
+const el=$('queue');el.replaceChildren();
+songs.forEach((s,i)=>{
+const li=document.createElement('li'),b=document.createElement('button');
+b.textContent=(i+1)+'. '+s.name;b.onclick=()=>choose(i);li.append(b);el.append(li);
+});render();
+}
+$('files').onchange=e=>{
+const added=Array.from(e.target.files||[]).filter(f=>f.type.startsWith('audio/')||/\.(mp3|wav|m4a|ogg|flac)$/i.test(f.name));
+songs.push(...added.map(file=>({file,name:file.name.replace(/\.[^.]+$/,'')})));
+queue();if(idx===-1&&songs.length)choose(0,false);e.target.value='';
+};
+$('play').onclick=()=>{if(idx<0)return;if(a.paused)a.play().catch(()=>{$('message').textContent='Browser cannot play this format.'});else a.pause()};
+$('prev').onclick=()=>choose((idx-1+songs.length)%songs.length);
+$('next').onclick=()=>choose((idx+1)%songs.length);
+function stop(){a.pause();a.currentTime=0;render()}
+$('stop').onclick=stop;$('power').onclick=stop;
+$('seek').oninput=e=>{if(Number.isFinite(a.duration))a.currentTime=Number(e.target.value)*a.duration/100};
+$('clear').onclick=()=>{a.pause();a.removeAttribute('src');a.load();if(url)URL.revokeObjectURL(url);url=null;idx=-1;songs=[];queue()};
+for(const e of ['play','pause','timeupdate','durationchange'])a.addEventListener(e,render);
+a.addEventListener('ended',()=>idx<songs.length-1?choose(idx+1):stop());
+a.addEventListener('error',()=>{$('message').textContent='Unable to decode this file. Try MP3 or WAV.'});
+window.addEventListener('pagehide',()=>{if(url)URL.revokeObjectURL(url)});
+queue();
+})();
+</script></body></html>
